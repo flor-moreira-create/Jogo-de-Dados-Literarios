@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sorteador de Dados Literários — TURMA 301</title>
+  <style>
+    body{background:#071028;color:#fff;margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif}
+    h1{text-align:center;margin:8px 0 16px}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:1100px;margin:0 auto}
+    .team{padding:10px;border-radius:10px;box-shadow:0 3px 8px rgba(0,0,0,.3);min-height:420px;display:flex;flex-direction:column;position:relative}
+    .team h2{text-align:center;font-size:16px;background:rgba(0,0,0,.3);padding:4px;border-radius:6px;margin:0 0 6px}
+    .confirmed-label{position:absolute;top:6px;right:6px;background:#22c55e;color:#fff;font-size:11px;padding:2px 6px;border-radius:6px;display:none}
+    .team.confirmed .confirmed-label{display:block}
+    .members{text-align:center}
+    .members input{width:90%;padding:5px;margin:3px 0;border-radius:6px;border:none;text-align:center}
+    .dice{display:grid;gap:6px;margin-top:6px}
+    .card{background:rgba(0,0,0,.5);padding:6px;border-radius:8px;text-align:center}
+    .label{font-size:11px;color:#cbd5e1}
+    .value{font-size:14px;font-weight:700}
+    .actions{display:flex;flex-direction:column;align-items:center;margin-top:6px;gap:6px}
+    .actions button{background:#fff;color:#000;border:none;padding:6px 10px;border-radius:8px;cursor:pointer;font-weight:700;width:120px}
+    .actions button:disabled{background:#555;cursor:not-allowed;color:#ccc}
+    .upload{margin-top:6px}
+    .upload input{display:block;margin:4px auto}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:16px}
+    .modal.show{display:flex}
+    .modal .box{max-width:900px;width:100%;background:#0d1b3f;padding:14px;border-radius:12px;text-align:center}
+    .summary{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+    .summary .card{background:#0b1430}
+    .file-link{margin-top:4px;font-size:12px;color:#93c5fd}
+  </style>
+</head>
+<body>
+  <h1>Sorteador de Dados Literários — 6 Equipes</h1>
+  <div class="grid" id="teams"></div>
+  <audio id="dice-sound" src="https://www.myinstants.com/media/sounds/dice.mp3" preload="auto"></audio>
+
+  <div id="endModal" class="modal">
+    <div class="box">
+      <h3>🏁 VAMOS PRODUZIR UMA NARRATIVA!</h3>
+      <div id="summary" class="summary"></div>
+      <button class="btn" id="reportBtn">📄 Relatar</button>
+    </div>
+  </div>
+
+  <script>
+    const dados={
+      personagens:["Detetive","Hacker","Viajante do tempo","Poeta","Cientista maluco","Criatura mítica"],
+      cenarios:["Cidade futurista","Ilha deserta","Biblioteca abandonada","Laboratório secreto","Festival","Universo paralelo"],
+      conflitos:["Precisa guardar um segredo","Perdeu algo valioso","Está sendo perseguido(a)","Descobriu um poder","Decisão difícil","Encontrou um inimigo inesperado"],
+      emocoes:["Medo","Alegria","Raiva","Tristeza","Coragem","Insegurança"],
+      objetos:["Amuleto","Diário antigo","Espada","Chave misteriosa","Mapa rasgado","Relógio mágico"],
+      estilos:["Comédia","Terror","Drama","Mistério","Fantasia","Ficção científica"]
+    }
+
+    const state={
+      confirmed:Array(6).fill(false),
+      members:Array.from({length:6},()=>['','','','']),
+      rolls:Array.from({length:6},()=>[]),
+      uploads:Array(6).fill(null),
+      gameStarted:true,teamsPlayed:0,rollCounts:Array(6).fill(0)
+    }
+
+    const $=s=>document.querySelector(s)
+    const pick=a=>a[Math.floor(Math.random()*a.length)]
+
+    function rollAll(i){
+      if(!state.gameStarted||state.confirmed[i]||state.rollCounts[i]>=3)return
+      const snd=$('#dice-sound');snd.currentTime=0;snd.play()
+      const r={personagem:pick(dados.personagens),cenario:pick(dados.cenarios),conflito:pick(dados.conflitos),emocao:pick(dados.emocoes),objeto:pick(dados.objetos),estilo:pick(dados.estilos)}
+      state.rolls[i]=[r]
+      $(`#personagem-${i}`).textContent=r.personagem
+      $(`#cenario-${i}`).textContent=r.cenario
+      $(`#conflito-${i}`).textContent=r.conflito
+      $(`#emocoes-${i}`).textContent=r.emocao
+      $(`#objetos-${i}`).textContent=r.objeto
+      $(`#estilos-${i}`).textContent=r.estilo
+      state.rollCounts[i]++
+      if(state.rollCounts[i]>=3){$(`#btn-${i}`).disabled=true}
+      $(`#choose-${i}`).disabled=false
+    }
+
+    function confirmChoice(i){
+      state.confirmed[i]=true
+      $(`#btn-${i}`).disabled=true
+      $(`#choose-${i}`).disabled=true
+      document.querySelector(`.team-${i}`).classList.add('confirmed')
+      state.teamsPlayed++
+      if(state.teamsPlayed===6){showSummary()}
+    }
+
+    function showSummary(){
+      const wrap=$('#summary');wrap.innerHTML=''
+      for(let i=0;i<6;i++){
+        const nomes=state.members[i].filter(Boolean).join(', ')||'—'
+        const itens=state.rolls[i].map(r=>`${r.personagem} • ${r.cenario} • ${r.conflito} • ${r.emocao} • ${r.objeto} • ${r.estilo}`).join('<br>')||'—'
+        const file=state.uploads[i]?`<div class="file-link">📎 Arquivo enviado</div>`:''
+        wrap.innerHTML+=`<div class="card"><div>Equipe ${i+1}</div><div>Integrantes: ${nomes}</div><div>${itens}</div>${file}</div>`
+      }
+      $('#endModal').classList.add('show')
+    }
+
+    function createTeam(i){
+      const t=document.createElement('div');t.className=`team team-${i}`
+      t.innerHTML=`<span class="confirmed-label">✅ Confirmada</span><h2>Equipe ${i+1}</h2><div class="members">${[0,1,2,3].map(j=>`<input id=m-${i}-${j} placeholder='Integrante ${j+1}' maxlength=24 />`).join('')}</div><div class=dice>${['personagem','cenario','conflito','emocoes','objetos','estilos'].map(f=>`<div class=card><div class=label>${f}</div><div class=value id=${f}-${i}>—</div></div>`).join('')}</div><div class=actions><button id=btn-${i} class=btn>Sortear</button><button id=choose-${i} class=btn disabled>Escolher</button><div class=upload><label>📎 Enviar arquivo:<input type=file id=file-${i} accept=".png,.jpeg,.jpg,.pdf"></label></div></div>`
+      t.querySelectorAll('.members input').forEach((inp,j)=>inp.addEventListener('change',()=>{
+        const val=inp.value.trim()
+        if(val){
+          const lower=val.toLowerCase()
+          const conflictSameTeam=state.members[i].some((m,k)=>k!==j && m.toLowerCase()===lower)
+          if(conflictSameTeam){alert("⚠️ Nome repetido na Equipe "+(i+1)+". Adicione sobrenome ou segundo nome para diferenciar.");inp.value="";return}
+          for(let teamIdx=0;teamIdx<6;teamIdx++){
+            if(teamIdx!==i){
+              if(state.members[teamIdx].some(m=>m.toLowerCase()===lower)){
+                alert("⚠️ O nome '"+val+"' já está cadastrado em outra equipe. Use o sobrenome ou um segundo nome para diferenciar.");inp.value="";return
+              }
+            }
+          }
+        }
+        state.members[i][j]=val
+      }))
+      t.querySelector(`#btn-${i}`).addEventListener('click',()=>rollAll(i))
+      t.querySelector(`#choose-${i}`).addEventListener('click',()=>confirmChoice(i))
+      t.querySelector(`#file-${i}`).addEventListener('change',e=>{
+        if(e.target.files.length>0){
+          state.uploads[i]=e.target.files[0]
+        }
+      })
+      return t
+    }
+
+    function boot(){for(let i=0;i<6;i++)$('#teams').appendChild(createTeam(i))}
+    $('#reportBtn').addEventListener('click',()=>{
+      alert("📄 Relatório gerado! Copie as informações acima para salvar ou enviar.")
+    })
+    boot()
+  </script>
+</body>
+</html>
